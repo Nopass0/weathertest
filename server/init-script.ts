@@ -1,86 +1,63 @@
-import { PrismaClient, WeatherType, Role } from "@prisma/client";
-import bcrypt from "bcrypt";
+import { PrismaClient, Role } from "@prisma/client";
+import argon2 from "argon2";
+import jwt from "jsonwebtoken";
 
 const prisma = new PrismaClient();
 
-async function main() {
-  // Ждем, пока база данных станет доступной
-  let retries = 5;
-  while (retries) {
-    try {
-      await prisma.$connect();
-      break;
-    } catch (err) {
-      console.log("Failed to connect to the database. Retrying...");
-      retries -= 1;
-      await new Promise((res) => setTimeout(res, 5000));
-    }
+async function createAdmin(email: string, password: string) {
+  console.log("Создание администратора...");
+
+  // Проверяем, есть ли уже администратор
+  const adminExists = await prisma.user.findFirst({
+    where: { role: Role.ADMIN },
+  });
+
+  if (adminExists) {
+    console.log("Администратор уже существует.");
+    return;
   }
 
-  if (retries === 0) {
-    console.error("Failed to connect to the database after multiple attempts");
-    process.exit(1);
-  }
+  const hashedPassword = await argon2.hash(password);
+  const token = jwt.sign({ email }, process.env.JWT_SECRET || "default_secret");
 
-  // Проверяем наличие админа
-  const adminCount = await prisma.user.count({ where: { role: Role.ADMIN } });
-  if (adminCount === 0) {
-    const hashedPassword = await bcrypt.hash("admin", 10);
-    await prisma.user.create({
-      data: {
-        email: "admin@admin.ru",
-        password: hashedPassword,
-        role: Role.ADMIN,
-        token: "admin_token", // Здесь лучше генерировать случайный токен
-      },
-    });
-    console.log("Admin user created");
-  }
+  await prisma.user.create({
+    data: {
+      email,
+      password: hashedPassword,
+      role: Role.ADMIN,
+      token: token,
+    },
+  });
 
-  // Проверяем наличие записей о погоде
-  const weatherCount = await prisma.weatherRecord.count();
-  if (weatherCount === 0) {
-    const startDate = new Date();
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(startDate);
-      date.setDate(date.getDate() + i);
-
-      const averageTemperature =
-        Math.round((Math.random() * 30 - 10) * 10) / 10;
-      const weatherTypes: WeatherType[] = [
-        WeatherType.SUNNY,
-        WeatherType.CLOUDY,
-        WeatherType.RAINY,
-        WeatherType.SNOWY,
-      ];
-      const weatherType =
-        weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
-
-      await prisma.weatherRecord.create({
-        data: {
-          date,
-          weatherType,
-          averageTemperature,
-          hourlyTemperatures: {
-            create: Array.from({ length: 24 }, (_, hour) => ({
-              hour,
-              temperature: averageTemperature + (Math.random() * 5 - 2.5),
-            })),
-          },
-        },
-      });
-    }
-    console.log("Generated weather data for 30 days");
-  }
-
-  console.log("Initialization completed");
+  console.log("Администратор успешно создан.");
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
+async function main() {
+  const [email, password] = process.argv.slice(2);
+
+  if (!email || !password) {
+    console.error("Email и пароль обязательны.");
     process.exit(1);
-  })
-  .finally(async () => {
+  }
+
+  try {
+    console.log("Попытка подключения к базе данных...");
+    await prisma.$connect();
+    console.log("Успешно подключено к базе данных.");
+
+    await createAdmin(email, password);
+
+    console.log("Инициализация успешно завершена.");
+  } catch (err) {
+    console.error("Ошибка во время инициализации:", err);
+    process.exit(1);
+  } finally {
     await prisma.$disconnect();
-  });
+    console.log("Отключено от базы данных.");
+  }
+}
+
+main().catch((e) => {
+  console.error("Необработанная ошибка во время инициализации:", e);
+  process.exit(1);
+});

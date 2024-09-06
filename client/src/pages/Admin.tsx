@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useWeather } from "@/hooks/useWeather";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,19 +30,38 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface WeatherData {
   id: string;
-  date: string;
+  date: Date;
   type: "SUNNY" | "CLOUDY" | "RAINY" | "SNOWY";
   averageTemperature: number;
   hourlyTemperatures: { hour: number; temperature: number }[];
 }
 
 const Admin: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
   const [newWeather, setNewWeather] = useState<Partial<WeatherData>>({
-    date: "",
+    date: new Date(),
     type: "SUNNY",
     averageTemperature: 0,
     hourlyTemperatures: Array.from({ length: 24 }, (_, i) => ({
@@ -52,8 +73,12 @@ const Admin: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    if (user?.role !== "ADMIN") {
+      navigate("/weather");
+      return;
+    }
     loadWeatherData();
-  }, []);
+  }, [user]);
 
   const loadWeatherData = async () => {
     try {
@@ -75,6 +100,12 @@ const Admin: React.FC = () => {
 
   const handleTypeChange = (value: string) => {
     setNewWeather((prev) => ({ ...prev, type: value as WeatherData["type"] }));
+  };
+
+  const handleDateChange = (date: Date | undefined) => {
+    if (date) {
+      setNewWeather((prev) => ({ ...prev, date }));
+    }
   };
 
   const handleHourlyTemperatureChange = (hour: number, temperature: number) => {
@@ -104,7 +135,7 @@ const Admin: React.FC = () => {
       }
       loadWeatherData();
       setNewWeather({
-        date: "",
+        date: new Date(),
         type: "SUNNY",
         averageTemperature: 0,
         hourlyTemperatures: Array.from({ length: 24 }, (_, i) => ({
@@ -121,6 +152,38 @@ const Admin: React.FC = () => {
     }
   };
 
+  const HourlyTemperatureChart = () => (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={newWeather.hourlyTemperatures}>
+        <XAxis dataKey="hour" />
+        <YAxis />
+        <Tooltip />
+        <Bar
+          dataKey="temperature"
+          fill="#8884d8"
+          onMouseDown={(data, index) => {
+            const startY = data.y;
+            const startTemp = data.temperature;
+
+            const handleMouseMove = (e: MouseEvent) => {
+              const diffY = startY - e.clientY;
+              const newTemp = Math.round(startTemp + diffY / 5);
+              handleHourlyTemperatureChange(data.hour, newTemp);
+            };
+
+            const handleMouseUp = () => {
+              document.removeEventListener("mousemove", handleMouseMove);
+              document.removeEventListener("mouseup", handleMouseUp);
+            };
+
+            document.addEventListener("mousemove", handleMouseMove);
+            document.addEventListener("mouseup", handleMouseUp);
+          }}
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+
   return (
     <ScrollArea className="h-screen">
       <div className="container mx-auto p-4 space-y-6">
@@ -132,16 +195,34 @@ const Admin: React.FC = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="date">Дата</Label>
-                <Input
-                  id="date"
-                  name="date"
-                  type="date"
-                  value={newWeather.date}
-                  onChange={handleInputChange}
-                  required
-                />
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-[240px] justify-start text-left font-normal",
+                        !newWeather.date && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {newWeather.date ? (
+                        format(newWeather.date, "PPP")
+                      ) : (
+                        <span>Выберите дату</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={newWeather.date}
+                      onSelect={handleDateChange}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               <div>
                 <Label htmlFor="type">Тип погоды</Label>
@@ -173,26 +254,7 @@ const Admin: React.FC = () => {
               </div>
               <div>
                 <Label>Почасовая температура</Label>
-                <div className="grid grid-cols-6 gap-2">
-                  {newWeather.hourlyTemperatures?.map(
-                    ({ hour, temperature }) => (
-                      <div key={hour}>
-                        <Label htmlFor={`hour-${hour}`}>{hour}:00</Label>
-                        <Input
-                          id={`hour-${hour}`}
-                          type="number"
-                          value={temperature}
-                          onChange={(e) =>
-                            handleHourlyTemperatureChange(
-                              hour,
-                              Number(e.target.value)
-                            )
-                          }
-                        />
-                      </div>
-                    )
-                  )}
-                </div>
+                <HourlyTemperatureChart />
               </div>
               <Button type="submit">
                 {newWeather.id ? "Обновить" : "Добавить"}
@@ -218,7 +280,9 @@ const Admin: React.FC = () => {
               <TableBody>
                 {weatherData.map((weather) => (
                   <TableRow key={weather.id}>
-                    <TableCell>{weather.date}</TableCell>
+                    <TableCell>
+                      {format(new Date(weather.date), "PPP")}
+                    </TableCell>
                     <TableCell>{weather.type}</TableCell>
                     <TableCell>{weather.averageTemperature}°C</TableCell>
                     <TableCell>
@@ -229,23 +293,11 @@ const Admin: React.FC = () => {
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>
-                              Детали погоды на {weather.date}
+                              Детали погоды на{" "}
+                              {format(new Date(weather.date), "PPP")}
                             </DialogTitle>
                           </DialogHeader>
-                          <div className="grid grid-cols-4 gap-2">
-                            {weather.hourlyTemperatures.map(
-                              ({ hour, temperature }) => (
-                                <div key={hour}>
-                                  <Label>{hour}:00</Label>
-                                  <Input
-                                    type="number"
-                                    value={temperature}
-                                    readOnly
-                                  />
-                                </div>
-                              )
-                            )}
-                          </div>
+                          <HourlyTemperatureChart />
                         </DialogContent>
                       </Dialog>
                       <Button

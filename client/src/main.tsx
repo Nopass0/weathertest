@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import ReactDOM from "react-dom";
+import ReactDOM from "react-dom/client";
 import "./index.css";
 import AuthPage from "@/pages/Auth";
 import AdminPage from "@/pages/Admin";
@@ -8,15 +8,15 @@ import { createStore } from "redux";
 import { Provider, useSelector, useDispatch } from "react-redux";
 import { IRouterLink } from "./types";
 import {
-  createBrowserRouter,
-  RouterProvider,
   Navigate,
   useNavigate,
+  BrowserRouter,
+  Routes,
+  Route,
 } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2 } from "lucide-react";
 
 // Redux store
@@ -44,7 +44,7 @@ const reducer = (state = defaultState, action: any) => {
 
 const store = createStore(reducer);
 
-// Router
+// Router links
 const publicLinks: IRouterLink[] = [
   {
     element: <AuthPage />,
@@ -63,23 +63,6 @@ const privateLinks: IRouterLink[] = [
   },
 ];
 
-const getLinks = () => {
-  return [
-    ...privateLinks,
-    ...publicLinks,
-    {
-      path: "/",
-      element: <Navigate to="/weather" replace />,
-    },
-    {
-      path: "*",
-      element: <Navigate to="/auth" replace />,
-    },
-  ];
-};
-
-const router = createBrowserRouter(getLinks());
-
 // Loader component
 const Loader: React.FC = () => (
   <div className="flex justify-center items-center h-screen">
@@ -87,8 +70,8 @@ const Loader: React.FC = () => (
   </div>
 );
 
-// App component
-const App: React.FC = () => {
+// AppContent component
+const AppContent: React.FC = () => {
   const { checkToken } = useAuth();
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -102,6 +85,7 @@ const App: React.FC = () => {
         try {
           const user = await checkToken();
           if (user) {
+            dispatch({ type: "SET_USER", user });
             toast({
               title: "Авторизация успешна",
               description: `Добро пожаловать, ${user.email}!`,
@@ -134,19 +118,39 @@ const App: React.FC = () => {
   }
 
   return (
-    <>
-      <RouterProvider router={router} />
+    <Routes>
+      {publicLinks.map((link) => (
+        <Route key={link.path} path={link.path} element={link.element} />
+      ))}
+      {privateLinks.map((link) => (
+        <Route key={link.path} path={link.path} element={link.element} />
+      ))}
+      <Route path="/" element={<Navigate to="/weather" replace />} />
+      <Route path="*" element={<Navigate to="/auth" replace />} />
+    </Routes>
+  );
+};
+
+// App component
+const App: React.FC = () => {
+  return (
+    <BrowserRouter>
+      <AppContent />
       <Toaster />
-    </>
+    </BrowserRouter>
   );
 };
 
 // Render
-ReactDOM.render(
-  <React.StrictMode>
-    <Provider store={store}>
-      <App />
-    </Provider>
-  </React.StrictMode>,
-  document.getElementById("root")
-);
+console.log("Starting to render app");
+const container = document.getElementById("root");
+if (container) {
+  const root = ReactDOM.createRoot(container);
+  root.render(
+    <React.StrictMode>
+      <Provider store={store}>
+        <App />
+      </Provider>
+    </React.StrictMode>
+  );
+}

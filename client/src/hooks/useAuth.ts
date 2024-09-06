@@ -1,5 +1,5 @@
 import { useDispatch, useSelector } from "react-redux";
-import axios from "axios";
+import api from "@/api/axiosConfig";
 
 interface User {
   email: string;
@@ -13,7 +13,7 @@ export const useAuth = () => {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await axios.post("/api/auth/login", { email, password });
+      const response = await api.post("/api/auth/login", { email, password });
       const { token, user } = response.data;
       localStorage.setItem("token", token);
       dispatch({ type: "SET_TOKEN", token });
@@ -21,13 +21,13 @@ export const useAuth = () => {
       return true;
     } catch (error) {
       console.error("Login error:", error);
-      return false;
+      throw error; // Перебрасываем ошибку, чтобы обработать её в компоненте
     }
   };
 
   const register = async (email: string, password: string) => {
     try {
-      const response = await axios.post("/api/auth/register", {
+      const response = await api.post("/api/auth/register", {
         email,
         password,
       });
@@ -38,7 +38,7 @@ export const useAuth = () => {
       return true;
     } catch (error) {
       console.error("Registration error:", error);
-      return false;
+      throw error; // Перебрасываем ошибку, чтобы обработать её в компоненте
     }
   };
 
@@ -50,7 +50,7 @@ export const useAuth = () => {
 
   const checkToken = async (): Promise<User | null> => {
     try {
-      const response = await axios.get("/api/auth/check", {
+      const response = await api.get("/api/auth/check", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const user: User = response.data.user;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import axios from "axios";
+import api from "@/api/axiosConfig";
 import { useAuth } from "@/hooks/useAuth";
 
 interface WeatherData {
@@ -20,7 +20,7 @@ export const useWeather = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`/api/weather/${date}`, {
+      const response = await api.get(`/api/weather/${date}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setWeatherData(response.data);
@@ -35,7 +35,7 @@ export const useWeather = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`/api/weather/range?page=${page}`, {
+      const response = await api.get(`/api/weather/range?page=${page}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       return response.data;
@@ -51,7 +51,7 @@ export const useWeather = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get("/api/weather/all", {
+      const response = await api.get("/api/weather/all", {
         headers: { Authorization: `Bearer ${token}` },
       });
       return response.data;
@@ -69,7 +69,7 @@ export const useWeather = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.post("/api/weather", weatherData, {
+      const response = await api.post("/api/weather", weatherData, {
         headers: { Authorization: `Bearer ${token}` },
       });
       return response.data;
@@ -87,7 +87,7 @@ export const useWeather = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.put(
+      const response = await api.put(
         `/api/weather/${weatherData.id}`,
         weatherData,
         {
